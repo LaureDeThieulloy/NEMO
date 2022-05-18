@@ -11,6 +11,14 @@ kb    = nemo.tools.kb
 e     = nemo.tools.e
 mass  = nemo.tools.mass
 
+def pega_total_energy(file):
+    with open('Geometries/'+file, 'r') as f:
+        for line in f:
+            if 'Total Free Energy' in line:
+                line = line.split()
+                total =  float(line[9])*27.2114
+                return total
+
 ##RETURNS LIST OF LOG FILES WITH NORMAL TERMINATION######################################
 def check_normal(files):
     normal = []
@@ -201,7 +209,8 @@ def pega_dipolos(file, ind,frase, state):
 
 ##GETS TRANSITION DIPOLE MOMENTS#########################################################
 def pega_oscs(file, ind,spin, ind_s):
-    frase    = "Transition Moments Between "+spin+" Excited States"
+    mapa = {'1':'Singlet','3':'Triplet'}
+    frase    = "Transition Moments Between "+mapa[spin]+" Excited States"
     location = np.where(ind_s == ind)[0][0]
     ind_s = ind_s[location+1:]
     order_s  = np.argsort(ind_s)
@@ -325,15 +334,17 @@ def read_cis(file):
 #########################################################################################      
 
 ##GETS ALL RELEVANT INFORMATION FROM LOG FILES###########################################
-def analysis():         
-    files =  [i for i in os.listdir('Geometries') if '.log' in i]    
+def analysis(folder='Geometries'):         
+    files =  [i for i in os.listdir(folder) if '.log' in i]    
     files = check_normal(files)
     files = sorted(files, key=lambda pair: float(pair.split('-')[1]))
     n_state = read_cis(files[0])
     Ms = np.zeros((1,n_state))
-
+    BASE = []
     for file in files:
-        singlets, triplets, oscs, ind_s, ind_t = pega_energias('Geometries/'+file)       
+        base = pega_total_energy(file)
+        BASE.append(base)
+        singlets, triplets, oscs, ind_s, ind_t = pega_energias(folder+'/'+file)       
         singlets, triplets, oscs, ind_s, ind_t = singlets[:n_state], triplets[:n_state], oscs[:n_state], ind_s[:n_state], ind_t[:n_state]     
         zero = ['0']
         zero.extend(ind_s)
@@ -368,10 +379,11 @@ def analysis():
             Triplets = triplets
             Oscs     = oscs
 
+    BASE = np.array(BASE)
     Ms = Ms[1:,:]
     term = e*(hbar2**2)/Triplets
     Os = (2*mass)*Ms/(3*term)
-    return Os, Singlets, Triplets, Oscs
+    return Os, Singlets, Triplets, Oscs, BASE
 #########################################################################################
 
 

@@ -238,23 +238,36 @@ def make_ensemble(freqlog, num_geoms, T, header, bottom):
 ##COLLECTS RESULTS############################################## 
 def gather_data(opc):
     from nemo.analysis import analysis
-    Os, Singlets, Triplets, Oscs = analysis()
+    Os, Singlets, Triplets, Oscs, Base = analysis()
+    try:
+        _, _, _, Base0 = analysis(opc)
+        mean, sigma    = np.mean(Base0), np.std(Base0)
+    except:
+        mean, sigma = Base, opc
+    Base -= mean
     num = np.shape(Singlets)[1]
     with open("Samples.lx", 'w') as f:
         for i in range(np.shape(Singlets)[0]):
-            f.write("Geometry "+str(i+1)+":  Vertical transition (eV) Oscillator strength Broadening Factor (eV) Spin \n")
+            f.write("{:14}\t{:12}\t{:10}\t{:9}\t{:14}\t{:7}\n".format("#Geometry_"+str(i+1),"Vertical(eV)","Shift(eV)","Oscillator","Broadening(eV)","Spin"))        
             for j in range(num):
-                f.write("Excited State {}:\t{}\t{:.5e}\t{}\t{}\n".format(j+1,Singlets[i,j],Oscs[i,j],opc,'Singlet'))        
+                f.write("{:14}\t{:12.3f}\t{:9.3f}\t{:9.5e}\t{:14.3f}\t{:7}\n".format(j+1,Singlets[i,j], Base[i],Oscs[i,j],sigma,'1'))        
             for j in range(num):
-                f.write("Excited State {}:\t{}\t{:.5e}\t{}\t{}\n".format(j+1,Triplets[i,j],Os[i,j],opc,'Triplet'))
+                f.write("{:14}\t{:12.3f}\t{:9.3f}\t{:9.5e}\t{:14.3f}\t{:7}\n".format(j+1,Triplets[i,j], Base[i],Os[i,j],  sigma,'3'))
 ############################################################### 
 
 ##COLLECTS RESULTS############################################## 
 def gather_data_abs(num_ex,spin,opc):
-    from nemo.analysis import pega_oscs, pega_energias, check_normal
+    from nemo.analysis import analysis, pega_oscs, pega_energias, check_normal
     files =  [i for i in os.listdir('Geometries') if '.log' in i]    
     files = check_normal(files)
     files = sorted(files, key=lambda pair: float(pair.split('-')[1]))
+    _, _, _, _, Base = analysis()
+    try:
+        _, _, _, Base0 = analysis(opc)
+        mean, sigma = np.mean(Base0), np.std(Base0)
+    except:
+        mean, sigma = Base, opc
+    Base -= mean
     i = 0
     with open("Samples.lx", 'w') as f:
         for file in files:
@@ -262,7 +275,7 @@ def gather_data_abs(num_ex,spin,opc):
             if num_ex == 0:
                 engs = singlets
             else:
-                if spin == 'Singlet':
+                if spin == '1':
                     ind   = ind_s[num_ex-1]
                     engs  = np.array(singlets[num_ex:]) - singlets[num_ex-1]
                     order = ind_s
@@ -271,10 +284,10 @@ def gather_data_abs(num_ex,spin,opc):
                     engs  = np.array(triplets[num_ex:]) - triplets[num_ex-1]
                     order = ind_t
                 oscs = pega_oscs(file,ind,spin,order)
-            f.write("Geometry "+str(i+1)+":  Vertical transition (eV) Oscillator strength Broadening Factor (eV) Spin \n")
-            i += 1
+            f.write("{:14}\t{:12}\t{:10}\t{:9}\t{:14}\t{:7}\n".format("#Geometry_"+str(i+1),"Vertical(eV)","Shift(eV)","Oscillator","Broadening(eV)","Spin"))
             for j in range(len(oscs)):
-                f.write("Excited State {}:\t{:.3f}\t{:.5e}\t{}\t{}\n".format(num_ex+j+1,engs[j],oscs[j],opc,spin))        
+                f.write("{:14}\t{:12.3f}\t{:9.3f}\t{:9.5e}\t{:14.3f}\t{:7}\n".format(num_ex+j+1,engs[j], Base[i],oscs[j],sigma,spin))  
+            i += 1          
 ############################################################### 
 
 
@@ -326,9 +339,11 @@ def ask_states(frase):
 ##COMPUTES SPECTRA############################################# 
 def spectra(tipo, num_ex, nr, opc):
     if 'S' in num_ex.upper():
-        spin = 'Singlet'
+        spin  = '1'
+        label = 'S'
     else:
-        spin = 'Triplet'
+        spin  = '3'
+        label = 'T'
     estado = int(num_ex[1:])     
     if tipo == "abs":
         label = num_ex.upper()
@@ -347,23 +362,24 @@ def spectra(tipo, num_ex, nr, opc):
         num_ex = [estado]
         constante = (1/3)*((nr**2)*(e**2)/(2*np.pi*hbar*mass*(c**3)*epsilon0))
         gather_data(opc)
-    V, O, S = [], [], []
+    V, O, VS, S = [], [], [], []
     N = 0
     with open("Samples.lx", 'r') as f:
         for line in f:
             if "Geometry" in line:
                 N += 1
-            elif "Excited State" in line and int(line.split()[2][:-1]) in num_ex and spin in line:
+            elif "Geometry" not in line and int(line.split()[0]) in num_ex and spin == line.split()[-1]:
                 line = line.split()
-                V.append(float(line[3]))
-                O.append(float(line[4]))
-                S.append(float(line[5]))
+                V.append(float(line[1]))
+                VS.append(float(line[2]))
+                O.append(float(line[3]))
+                S.append(float(line[4]))
     coms = start_counter()
     if len(V) == 0 or len(O) == 0:
         fatal_error("You need to run steps 1 and 2 first! Goodbye!")
     elif len(V) != coms*len(num_ex):
         print("Number of log files is less than the number of inputs. Something is not right! Computing the spectrum anyway...")
-    V = np.array(V)
+    V = np.array(V) + np.array(VS) 
     O = np.array(O)
     S = np.array(S)
     if tipo == 'abs':
@@ -387,9 +403,9 @@ def spectra(tipo, num_ex, nr, opc):
     if tipo == 'emi':
         #Emission rate calculations
         mean_rate, error_rate = calc_emi_rate(x, mean_y,sigma) 
-        segunda = '# Total Rate {}{} -> S0: {:5.2e} +/- {:5.2e} s^-1\n'.format(spin[0],num_ex[0],mean_rate,error_rate)
+        segunda = '# Total Rate {}{} -> S0: {:5.2e} +/- {:5.2e} s^-1\n'.format(label,num_ex[0],mean_rate,error_rate)
     else:
-        segunda = '# Absorption from State: {}{}\n'.format(spin[0],estado)
+        segunda = '# Absorption from State: {}\n'.format(label)
 
     print(N, "geometries considered.")     
     with open(arquivo, 'w') as f:
