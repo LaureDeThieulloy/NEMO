@@ -240,7 +240,7 @@ def gather_data(opc):
     from nemo.analysis import analysis
     Os, Singlets, Triplets, Oscs, Base = analysis()
     try:
-        _, _, _, Base0 = analysis(opc)
+        _, _, _, _, Base0 = analysis(opc)
         mean, sigma    = np.mean(Base0), np.std(Base0)
     except:
         mean, sigma = Base, opc
@@ -263,7 +263,7 @@ def gather_data_abs(num_ex,spin,opc):
     files = sorted(files, key=lambda pair: float(pair.split('-')[1]))
     _, _, _, _, Base = analysis()
     try:
-        _, _, _, Base0 = analysis(opc)
+        _, _, _, _, Base0 = analysis(opc)
         mean, sigma = np.mean(Base0), np.std(Base0)
     except:
         mean, sigma = Base, opc

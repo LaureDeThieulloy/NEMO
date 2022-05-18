@@ -11,8 +11,8 @@ kb    = nemo.tools.kb
 e     = nemo.tools.e
 mass  = nemo.tools.mass
 
-def pega_total_energy(file):
-    with open('Geometries/'+file, 'r') as f:
+def pega_total_energy(file,folder='.'):
+    with open(folder+'/Geometries/'+file, 'r') as f:
         for line in f:
             if 'Total Free Energy' in line:
                 line = line.split()
@@ -20,11 +20,11 @@ def pega_total_energy(file):
                 return total
 
 ##RETURNS LIST OF LOG FILES WITH NORMAL TERMINATION######################################
-def check_normal(files):
+def check_normal(files,folder='.'):
     normal = []
     add = False
     for file in files:
-        with open('Geometries/'+file, 'r') as f:
+        with open(folder+'/Geometries/'+file, 'r') as f:
             for line in f:
                 if 'TDDFT/TDA Excitation Energies' in line or 'TDDFT Excitation Energies' in line:
                     exc = True
@@ -334,38 +334,41 @@ def read_cis(file):
 #########################################################################################      
 
 ##GETS ALL RELEVANT INFORMATION FROM LOG FILES###########################################
-def analysis(folder='Geometries'):         
-    files =  [i for i in os.listdir(folder) if '.log' in i]    
-    files = check_normal(files)
+def analysis(folder='.'):         
+    files =  [i for i in os.listdir(folder+'/Geometries') if '.log' in i]    
+    files = check_normal(files,folder)
     files = sorted(files, key=lambda pair: float(pair.split('-')[1]))
     n_state = read_cis(files[0])
     Ms = np.zeros((1,n_state))
     BASE = []
     for file in files:
-        base = pega_total_energy(file)
+        base = pega_total_energy(file,folder)
         BASE.append(base)
-        singlets, triplets, oscs, ind_s, ind_t = pega_energias(folder+'/'+file)       
+        singlets, triplets, oscs, ind_s, ind_t = pega_energias(folder+'/Geometries/'+file)       
         singlets, triplets, oscs, ind_s, ind_t = singlets[:n_state], triplets[:n_state], oscs[:n_state], ind_s[:n_state], ind_t[:n_state]     
         zero = ['0']
         zero.extend(ind_s)
 
-        MMs = []
-        MS0      = pega_dipolos(file, zero,"Electron Dipole Moments of Ground State",0)            
-        MS0resto = pega_dipolos(file, zero,"Transition Moments Between Ground and Singlet Excited States",0) 
-        MS0      = np.vstack((MS0,MS0resto))    
-        for n_triplet in range(n_state):
-            MT1      = pega_dipolos(file, ind_t,"Electron Dipole Moments of Triplet Excited State",n_triplet)            
-            MT1resto = pega_dipolos(file, ind_t,"Transition Moments Between Triplet Excited States",n_triplet)           
-            MT1      = np.vstack((MT1,MT1resto))
-            #Fixing the order
-            order = np.arange(1,n_state)
-            order = np.insert(order,n_triplet,0)
-            MT1   = MT1[order,:]
-            ms    = moment(file,singlets,triplets,MS0,MT1,n_triplet,ind_s,ind_t)  
-            MMs.append(ms)
-        MMs = np.array(MMs)
-        MMs = MMs[np.newaxis,:]
-        Ms = np.vstack((Ms,MMs))
+        if folder=='.': # Only gets triplet osc if taken from main ensemble
+            MMs = []
+            MS0      = pega_dipolos(file, zero,"Electron Dipole Moments of Ground State",0)            
+            MS0resto = pega_dipolos(file, zero,"Transition Moments Between Ground and Singlet Excited States",0) 
+            MS0      = np.vstack((MS0,MS0resto))    
+            for n_triplet in range(n_state):
+                MT1      = pega_dipolos(file, ind_t,"Electron Dipole Moments of Triplet Excited State",n_triplet)            
+                MT1resto = pega_dipolos(file, ind_t,"Transition Moments Between Triplet Excited States",n_triplet)           
+                MT1      = np.vstack((MT1,MT1resto))
+                #Fixing the order
+                order = np.arange(1,n_state)
+                order = np.insert(order,n_triplet,0)
+                MT1   = MT1[order,:]
+                ms    = moment(file,singlets,triplets,MS0,MT1,n_triplet,ind_s,ind_t)  
+                MMs.append(ms)
+            MMs = np.array(MMs)
+            MMs = MMs[np.newaxis,:]
+            Ms = np.vstack((Ms,MMs))
+        else:
+            Ms = np.vstack((Ms,np.zeros((1,n_state)))) 
 
         singlets = np.array([singlets[:n_state]])
         triplets = np.array([triplets[:n_state]])
